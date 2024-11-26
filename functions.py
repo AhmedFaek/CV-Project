@@ -1,7 +1,86 @@
-
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+
+flag = 0
+
+def checkRGB(image):
+    image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+    # Calculate the absolute difference between the R, G, and B channels
+    diff1 = np.abs(image_rgb[:, :, 0] - image_rgb[:, :, 1])  # R - G
+    diff2 = np.abs(image_rgb[:, :, 0] - image_rgb[:, :, 2])  # R - B
+    diff3 = np.abs(image_rgb[:, :, 1] - image_rgb[:, :, 2])  # G - B
+
+    # Any non-zero difference means a pixel is not pure grayscale (not black or white)
+    has_color = np.any((diff1 > 0) | (diff2 > 0) | (diff3 > 0))
+
+    if has_color:
+        return True
+    else:
+        return False
+
+def removeOverlay(img):
+    _, img = cv.threshold(img, 15, 255, cv.THRESH_BINARY)
+    flag = 1
+
+
+    return img, flag
+
+def barcodeErosion(img):
+    # Erode the barcode image
+    structuring_element_length = img.shape[0]
+    vertical_structure = cv.getStructuringElement(cv.MORPH_RECT, (1, structuring_element_length))
+    dilated_image = cv.erode(img, vertical_structure, iterations=1)
+
+    # Apply threshold
+    ret, dilated_image = cv.threshold(dilated_image, 10, 150, cv.THRESH_BINARY)
+
+    return dilated_image
+
+def rotationDetection(img, flag):
+    padded_img = cv.copyMakeBorder(
+        img,
+        top=40,
+        bottom=40,
+        left=40,
+        right=40,
+        borderType=cv.BORDER_CONSTANT,
+        value=[248, 248, 248]
+    )
+
+    # Blur and detect edges
+    imgBlur = cv.GaussianBlur(padded_img, (5, 5), 0)
+    edges = cv.Canny(imgBlur, 30, 100)
+
+    # Use Hough Line Transform to detect the lines
+    lines = cv.HoughLines(edges, 1, np.pi / 180, 200)
+
+    # Calculate the angle of the detected lines and compute the average angle
+    angles = []
+    for line in lines:
+        rho, theta = line[0]
+        angle = np.degrees(theta) - 180  # Convert from radians to degrees
+        angles.append(angle)
+
+    # Find the median angle (to avoid outliers)
+    angle = np.median(angles)
+
+    if abs(angle) != 180:
+        # Rotate the image to straighten the barcode
+        (h, w) = padded_img.shape
+        center = (w // 2, h // 2)
+        rotation_matrix = cv.getRotationMatrix2D(center, angle, 1.0)
+
+        # Perform the rotation and fill the image with white color
+        rotated_img = cv.warpAffine(padded_img, rotation_matrix, (w, h), flags=cv.INTER_CUBIC,
+                                    borderMode=cv.BORDER_CONSTANT, borderValue=(248, 248, 248))
+        flag = 1
+
+        return rotated_img, flag
+
+    else:
+        return img, flag
 
 def noiseDetection(img):
     edges = cv.Canny(img ,30 ,100)
@@ -77,9 +156,24 @@ def adjustBrightness(img):
 
 
 def detectingBarCode(img):
-    img = noiseDetection(img)
+    flag = 0
+
+    if checkRGB(img):
+        img, flag = removeOverlay(img)
+
+
+
+    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
 
     img = adjustBrightness(img)
+
+    img = noiseDetection(img)
+
+    img, flag = rotationDetection(img, flag)
+
+
+
+
 
     img = sharpen_if_needed(img)
 
@@ -110,7 +204,7 @@ def detectingBarCode(img):
     # Optionally expand the bounding box to include the full barcode
     padding = 10
     x = max(0, x - padding)
-    y = max(0, y - padding)
+    y = max(0, y - padding - 5)
     w = min(img.shape[1] - x, w + 2 * padding)
     h = min(img.shape[0] - y, h + 2 * padding)
 
@@ -123,6 +217,12 @@ def detectingBarCode(img):
 
     output = sharpen_if_needed(output)
 
+
+    if flag:
+        cropped_barcode = barcodeErosion(cropped_barcode)
+
+
+
     # Display the results
     images = [img, imgBlur, edges, closed, output, cropped_barcode]
     titles = [
@@ -131,7 +231,7 @@ def detectingBarCode(img):
         "Edges",
         "Morphed Image",
         "Detected Barcode",
-        "Cropped Barcode Without Numbers"
+        "Final Output"
     ]
 
     plt.figure(figsize=(15, 10))
@@ -146,3 +246,6 @@ def detectingBarCode(img):
 
     plt.tight_layout()
     plt.show()
+
+
+

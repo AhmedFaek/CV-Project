@@ -1,4 +1,9 @@
 from functions import *
 
-img = cv.imread("07 - mal7 w felfel.jpg", 0)
+img = cv.imread("11 - bayza 5ales di bsara7a.jpg")
+
+
 detectingBarCode(img)
+
+
+
