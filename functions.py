@@ -7,7 +7,6 @@ def noiseDetection(img):
     edges = cv.Canny(img ,30 ,100)
     num_edges = np.count_nonzero(edges)
     print(num_edges)
-
     if num_edges > 50000:
         blurred = cv.blur(img, (1, 7))
 
@@ -79,7 +78,9 @@ def adjustBrightness(img):
 
 def detectingBarCode(img):
     img = noiseDetection(img)
+
     img = adjustBrightness(img)
+
     img = sharpen_if_needed(img)
 
     imgBlur = cv.GaussianBlur(img, (5, 5), 0)
@@ -101,69 +102,47 @@ def detectingBarCode(img):
         barcode_contour = contours[0]
     else:
         print("No contours detected")
-        return None
+        exit()
 
-    # Get the minimum area rectangle
-    rect = cv.minAreaRect(barcode_contour)
-    box = cv.boxPoints(rect)
-    box = np.int0(box)
-
-    # Calculate the rotation angle
-    angle = rect[-1]
-    if rect[1][0] < rect[1][1]:  # Width < Height
-        angle = -(90 + angle)
-    else:  # Width > Height
-        angle = -angle
-
-    print(f"Rotation Angle: {angle} degrees")
-
-    # Rotate the entire image to make the barcode parallel to the X-axis
-    (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
-    M = cv.getRotationMatrix2D(center, angle, 1.0)
-    rotated = cv.warpAffine(img, M, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
-
-    # Re-detect contours on the rotated image for accurate cropping
-    imgBlur = cv.GaussianBlur(rotated, (5, 5), 0)
-    edges = cv.Canny(imgBlur, 30, 100)
-    closed = cv.morphologyEx(edges, cv.MORPH_CLOSE, kernel)
-    contours, _ = cv.findContours(closed, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv.contourArea, reverse=True)
-
-    if len(contours) > 0:
-        barcode_contour = contours[0]
-
-    # Get the bounding box for the barcode
+    # Get the bounding box for the largest contour
     x, y, w, h = cv.boundingRect(barcode_contour)
 
-    # Optionally expand the bounding box to include full barcode
+    # Optionally expand the bounding box to include the full barcode
     padding = 10
     x = max(0, x - padding)
     y = max(0, y - padding)
-    w = min(rotated.shape[1] - x, w + 2 * padding)
-    h = min(rotated.shape[0] - y, h + 2 * padding)
+    w = min(img.shape[1] - x, w + 2 * padding)
+    h = min(img.shape[0] - y, h + 2 * padding)
 
-    # Crop the barcode
-    cropped_barcode = rotated[y:y + h, x:x + w]
+    # Crop the barcode without numbers (exclude bottom portion)
+    cropped_barcode = img[y:y + int(h), x:x + int(w)]
 
-    # Visualize the result
-    images = [rotated, imgBlur, edges, closed, cropped_barcode]
+    # Draw the contour and bounding box on the original image
+    output = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    cv.drawContours(output, [barcode_contour], -1, (0, 255, 0), 2)
+
+    output = sharpen_if_needed(output)
+
+    # Display the results
+    images = [img, imgBlur, edges, closed, output, cropped_barcode]
     titles = [
-        "Rotated Image",
+        "Original Image",
         "Blurred Image",
         "Edges",
         "Morphed Image",
-        "Cropped Barcode"
+        "Detected Barcode",
+        "Cropped Barcode Without Numbers"
     ]
 
     plt.figure(figsize=(15, 10))
     for i in range(len(images)):
         plt.subplot(2, 3, i + 1)
-        plt.imshow(images[i], cmap="gray")
+        if i == len(images) - 1:  # Last image is cropped barcode
+            plt.imshow(images[i], cmap="gray")
+        else:
+            plt.imshow(images[i], cmap="gray")
         plt.title(titles[i])
         plt.axis("off")
 
     plt.tight_layout()
     plt.show()
-
-    
