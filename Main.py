@@ -24,6 +24,40 @@ def sharpen_if_needed(img):
 
     return img
 
+def adjustBrightness(img):
+    avg_brightness = np.mean(img)
+    print(f"avg brightness {avg_brightness}")
+
+    # Check if the image has low brightness
+    if avg_brightness < 20:
+        # Create a binary mask where the pixels greater than 0 are set to 1
+        mask = img > 10
+
+        # Create a new image initialized to the same values as the original image
+        bright_image = img.copy()
+
+        # Set all pixels where mask is True to 255
+        bright_image[mask] = 255
+
+        return bright_image
+
+    elif avg_brightness > 250:
+        mask = img >= 250
+
+        # Create a new image initialized to the same values as the original image
+        dark_image = img.copy()
+
+        # Set all pixels where mask is True to 255
+        dark_image[mask] = 255
+
+        # Set all pixels where mask is False to 0 (optional, since the default is already 0)
+        dark_image[~mask] = 0
+        return dark_image
+
+    else:
+        print(f"no need to adjust brightness")
+        return img
+
 
 def detectingBarCode(img):
     # Apply sharpening if needed
@@ -95,7 +129,7 @@ def detectingBarCode(img):
 
 
 # Read and preprocess the image
-img = cv.imread("04 - fen el nadara.jpg", 0)
-
+img = cv.imread("02 - still easy.jpg", 0)
+img = adjustBrightness(img)
 # Call detectingBarCode function directly; it will handle sharpening if needed
 detectingBarCode(img)
