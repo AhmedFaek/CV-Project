@@ -50,7 +50,7 @@ def rotationDetection(img, flag):
 def noiseDetection(img):
     edges = cv.Canny(img ,30 ,100)
     num_edges = np.count_nonzero(edges)
-    print(num_edges)
+    print(f"num edges = {num_edges}")
     if num_edges > 50000:
         blurred = cv.blur(img, (1, 7))
 
@@ -156,9 +156,9 @@ def detectingBarCode(img):
     x, y, w, h = cv.boundingRect(barcode_contour)
 
     # Optionally expand the bounding box to include the full barcode
-    padding = 10
+    padding = 0
     x = max(0, x - padding)
-    y = max(0, y - padding - 5)
+    y = max(0, y - padding)
     w = min(img.shape[1] - x, w + 2 * padding)
     h = min(img.shape[0] - y, h + 2 * padding)
 
@@ -197,8 +197,6 @@ def detectingBarCode(img):
 
 
 def objectDetection(img,flag):
-    flattened = img.flatten()
-
     # # Count the frequency of each pixel intensity value
     # unique, counts = np.unique(flattened, return_counts=True)
 
@@ -212,7 +210,7 @@ def objectDetection(img,flag):
 
     # Use the mask to sum pixel values in the range
     total_sum = np.sum(img[mask])
-    print(total_sum) 
+    print(f"total sum of pixels between 100 & 200 = {total_sum}") 
 
     if total_sum >= 2000000 and total_sum<=3000000:
         flag = 1
@@ -220,8 +218,47 @@ def objectDetection(img,flag):
     return img,flag
 
 
+def decompress(img):
 
-img = cv.imread("03 - eda ya3am ew3a soba3ak mathazarsh.jpg",0)
+    # lower_bound = 200
+    # upper_bound = 250
+    # mask = (img >= lower_bound) & (img <= upper_bound)
+
+    # # Use the mask to sum pixel values in the range
+    # total_sum = np.sum(img[mask])
+
+    ranges = [(50, 100), (100, 150), (150, 200), (200, 250)]
+    threshold = 3000000
+    sums = []
+    for lower_bound, upper_bound in ranges:
+    # Create a mask for the current range
+        mask = (img >= lower_bound) & (img < upper_bound)
+        
+        # Sum pixel values within the range
+        total_sum = np.sum(img[mask])
+        
+        # Store the sum in the list
+        sums.append(total_sum)
+
+        if all(value < threshold for value in sums):
+            factor = 1.5
+            img = img.astype(np.float32)  # Convert to float for calculation
+            img = img * factor  # Multiply pixel values by the factor
+            img = np.clip(img, 0, 255)  # Ensure the pixel values stay within [0, 255]
+            img = img.astype(np.uint8)  # Convert back to uint8
+            kernel_size = 3
+            filtered_img = cv.medianBlur(img, kernel_size)
+            _, binary_img = cv.threshold(img, 220, 255, cv.THRESH_BINARY)
+            return binary_img 
+        
+        else:
+            return img
+
+
+
+filename = "08 - compresso espresso.jpg"
+img = cv.imread(filename,0)
+print(f"image : {filename}")
 # 01 - lol easy.jpg
 # 02 - still easy.jpg
 # 03 - eda ya3am ew3a soba3ak mathazarsh.jpg
@@ -238,15 +275,18 @@ img = adjustBrightness(img)
 img = noiseDetection(img)
 img, flag = rotationDetection(img, 0)
 print(flag)
+img = decompress(img)
 img = sharpen_if_needed(img)
 img, flag = objectDetection(img,flag)
 print(flag)
+
 if(flag):
     ret, img = cv.threshold(img, 25, 255, cv.THRESH_BINARY)
     img = detectingBarCode(img)
     img = barcodeErosion(img)
 else:
     img = detectingBarCode(img)
+
 
 plt.imshow(img,cmap='gray')
 plt.show()

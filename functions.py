@@ -213,6 +213,41 @@ def objectDetection(img, flag):
 
     return img, flag
 
+def decompress(img):
+
+    # lower_bound = 200
+    # upper_bound = 250
+    # mask = (img >= lower_bound) & (img <= upper_bound)
+
+    # # Use the mask to sum pixel values in the range
+    # total_sum = np.sum(img[mask])
+
+    ranges = [(50, 100), (100, 150), (150, 200), (200, 250)]
+    threshold = 3000000
+    sums = []
+    for lower_bound, upper_bound in ranges:
+    # Create a mask for the current range
+        mask = (img >= lower_bound) & (img < upper_bound)
+        
+        # Sum pixel values within the range
+        total_sum = np.sum(img[mask])
+        
+        # Store the sum in the list
+        sums.append(total_sum)
+
+        if all(value < threshold for value in sums):
+            factor = 1.5
+            img = img.astype(np.float32)  # Convert to float for calculation
+            img = img * factor  # Multiply pixel values by the factor
+            img = np.clip(img, 0, 255)  # Ensure the pixel values stay within [0, 255]
+            img = img.astype(np.uint8)  # Convert back to uint8
+            kernel_size = 3
+            filtered_img = cv.medianBlur(img, kernel_size)
+            _, binary_img = cv.threshold(img, 220, 255, cv.THRESH_BINARY)
+            return binary_img 
+        
+        else:
+            return img
 
 def blur(img):
     imgBlur = cv.GaussianBlur(img, (5, 5), 0)
