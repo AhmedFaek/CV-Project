@@ -196,7 +196,32 @@ def detectingBarCode(img):
     return cropped_barcode
 
 
-img = cv.imread("09 - e3del el soora ya3ammm.jpg",0)
+def objectDetection(img,flag):
+    flattened = img.flatten()
+
+    # # Count the frequency of each pixel intensity value
+    # unique, counts = np.unique(flattened, return_counts=True)
+
+    # # Create a dictionary mapping each intensity value to its frequency
+    # freq_dict = dict(zip(unique, counts))
+
+    # Create a mask for pixels in the specified range
+    lower_bound = 100
+    upper_bound = 200
+    mask = (img >= lower_bound) & (img <= upper_bound)
+
+    # Use the mask to sum pixel values in the range
+    total_sum = np.sum(img[mask])
+    print(total_sum) 
+
+    if total_sum >= 2000000 and total_sum<=3000000:
+        flag = 1
+    
+    return img,flag
+
+
+
+img = cv.imread("03 - eda ya3am ew3a soba3ak mathazarsh.jpg",0)
 # 01 - lol easy.jpg
 # 02 - still easy.jpg
 # 03 - eda ya3am ew3a soba3ak mathazarsh.jpg
@@ -212,8 +237,10 @@ img = cv.imread("09 - e3del el soora ya3ammm.jpg",0)
 img = adjustBrightness(img)
 img = noiseDetection(img)
 img, flag = rotationDetection(img, 0)
+print(flag)
 img = sharpen_if_needed(img)
-
+img, flag = objectDetection(img,flag)
+print(flag)
 if(flag):
     ret, img = cv.threshold(img, 25, 255, cv.THRESH_BINARY)
     img = detectingBarCode(img)
@@ -223,3 +250,5 @@ else:
 
 plt.imshow(img,cmap='gray')
 plt.show()
+
+
