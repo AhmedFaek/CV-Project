@@ -2,41 +2,20 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
-flag = 0
 
-def checkRGB(image):
-    image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+def display_images(images, titles, cmap="gray"):
+    plt.figure(figsize=(15, 10))
+    for i, img in enumerate(images):
+        plt.subplot(2, (len(images) + 1) // 2, i + 1)
+        if cmap and len(img.shape) == 2:  # Grayscale images
+            plt.imshow(img, cmap=cmap)
+        else:  # Color images
+            plt.imshow(cv.cvtColor(img, cv.COLOR_BGR2RGB))
+        plt.title(titles[i])
+        plt.axis("off")
+    plt.tight_layout()
+    plt.show()
 
-    # Calculate the absolute difference between the R, G, and B channels
-    diff1 = np.abs(image_rgb[:, :, 0] - image_rgb[:, :, 1])  # R - G
-    diff2 = np.abs(image_rgb[:, :, 0] - image_rgb[:, :, 2])  # R - B
-    diff3 = np.abs(image_rgb[:, :, 1] - image_rgb[:, :, 2])  # G - B
-
-    # Any non-zero difference means a pixel is not pure grayscale (not black or white)
-    has_color = np.any((diff1 > 0) | (diff2 > 0) | (diff3 > 0))
-
-    if has_color:
-        return True
-    else:
-        return False
-
-def removeOverlay(img):
-    _, img = cv.threshold(img, 15, 255, cv.THRESH_BINARY)
-    flag = 1
-
-
-    return img, flag
-
-def barcodeErosion(img):
-    # Erode the barcode image
-    structuring_element_length = img.shape[0]
-    vertical_structure = cv.getStructuringElement(cv.MORPH_RECT, (1, structuring_element_length))
-    dilated_image = cv.erode(img, vertical_structure, iterations=1)
-
-    # Apply threshold
-    ret, dilated_image = cv.threshold(dilated_image, 10, 150, cv.THRESH_BINARY)
-
-    return dilated_image
 
 def rotationDetection(img, flag):
     padded_img = cv.copyMakeBorder(
@@ -82,10 +61,10 @@ def rotationDetection(img, flag):
     else:
         return img, flag
 
+
 def noiseDetection(img):
-    edges = cv.Canny(img ,30 ,100)
+    edges = cv.Canny(img, 30, 100)
     num_edges = np.count_nonzero(edges)
-    print(num_edges)
     if num_edges > 50000:
         blurred = cv.blur(img, (1, 7))
 
@@ -101,28 +80,9 @@ def noiseDetection(img):
     else:
         return img
 
-def sharpen_if_needed(img):
-    # Compute the Laplacian
-    laplacian = cv.Laplacian(img, cv.CV_64F)
-
-    # Compute the variance of the Laplacian
-    variance = laplacian.var()
-    print(f"Variance of Laplacian: {variance}")
-
-    # Decide if the image is blurry (threshold can be adjusted)
-    threshold = 300
-    if variance < threshold:
-        # Sharpen the image if it is blurry
-        kernel = np.array([[0, -1, 0],
-                           [-1, 5, -1],
-                           [0, -1, 0]])
-        img = cv.filter2D(img, -1, kernel)
-
-    return img
 
 def adjustBrightness(img):
     avg_brightness = np.mean(img)
-    print(f"avg brightness {avg_brightness}")
 
     # Check if the image has low brightness
     if avg_brightness < 20:
@@ -151,32 +111,37 @@ def adjustBrightness(img):
         return dark_image
 
     else:
-        print(f"no need to adjust brightness")
         return img
 
 
-def detectingBarCode(img):
-    flag = 0
+def sharpen_if_needed(img):
+    # Compute the Laplacian
+    laplacian = cv.Laplacian(img, cv.CV_64F)
 
-    if checkRGB(img):
-        img, flag = removeOverlay(img)
+    # Compute the variance of the Laplacian
+    variance = laplacian.var()
+
+    # Decide if the image is blurry (threshold can be adjusted)
+    threshold = 300
+    if variance < threshold:
+        # Sharpen the image if it is blurry
+        kernel = np.array([[0, -1, 0],
+                           [-1, 5, -1],
+                           [0, -1, 0]])
+        img = cv.filter2D(img, -1, kernel)
+
+    return img
 
 
+def barcodeErosion(img):
+    structuring_element_length = img.shape[0]
+    vertical_structure = cv.getStructuringElement(cv.MORPH_RECT, (1, structuring_element_length))
+    img = cv.erode(img, vertical_structure, iterations=1)
 
-    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-
-    img = adjustBrightness(img)
-
-    img = noiseDetection(img)
-
-    img, flag = rotationDetection(img, flag)
+    return img
 
 
-
-
-
-    img = sharpen_if_needed(img)
-
+def detectingBarCode(img, flag2):
     imgBlur = cv.GaussianBlur(img, (5, 5), 0)
 
     # Adjust thresholds for better edge detection
@@ -201,7 +166,6 @@ def detectingBarCode(img):
     # Get the bounding box for the largest contour
     x, y, w, h = cv.boundingRect(barcode_contour)
 
-    # Optionally expand the bounding box to include the full barcode
     padding = 10
     x = max(0, x - padding)
     y = max(0, y - padding - 5)
@@ -215,13 +179,9 @@ def detectingBarCode(img):
     output = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
     cv.drawContours(output, [barcode_contour], -1, (0, 255, 0), 2)
 
-    output = sharpen_if_needed(output)
-
-
-    if flag:
+    if flag2 == 2:
+        _, cropped_barcode = cv.threshold(cropped_barcode, 80, 255, cv.THRESH_BINARY)
         cropped_barcode = barcodeErosion(cropped_barcode)
-
-
 
     # Display the results
     images = [img, imgBlur, edges, closed, output, cropped_barcode]
@@ -231,21 +191,43 @@ def detectingBarCode(img):
         "Edges",
         "Morphed Image",
         "Detected Barcode",
-        "Final Output"
+        "Final Output - cropped_barcode"
     ]
 
-    plt.figure(figsize=(15, 10))
-    for i in range(len(images)):
-        plt.subplot(2, 3, i + 1)
-        if i == len(images) - 1:  # Last image is cropped barcode
-            plt.imshow(images[i], cmap="gray")
-        else:
-            plt.imshow(images[i], cmap="gray")
-        plt.title(titles[i])
-        plt.axis("off")
-
-    plt.tight_layout()
-    plt.show()
+    display_images(images, titles)
+    return cropped_barcode
 
 
+def objectDetection(img, flag):
+    flattened = img.flatten()
 
+    lower_bound = 100
+    upper_bound = 200
+    mask = (img >= lower_bound) & (img <= upper_bound)
+
+    # Use the mask to sum pixel values in the range
+    total_sum = np.sum(img[mask])
+
+    if 2000000 <= total_sum <= 3000000:
+        flag = 1
+
+    return img, flag
+
+
+def blur(img):
+    imgBlur = cv.GaussianBlur(img, (5, 5), 0)
+    return imgBlur
+
+
+def contrastDetection(img):
+    # Calculate the standard deviation of pixel intensities
+    std_dev = np.std(img)
+
+
+    if std_dev > 50:
+        return img, 0
+    else:
+        min_val = np.min(img)
+        max_val = np.max(img)
+        stretched_image = ((img - min_val) / (max_val - min_val) * 255).astype(np.uint8)
+        return stretched_image, 2
