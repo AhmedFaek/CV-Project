@@ -55,6 +55,7 @@ def rotationDetection(img, flag):
         rotated_img = cv.warpAffine(padded_img, rotation_matrix, (w, h), flags=cv.INTER_CUBIC,
                                     borderMode=cv.BORDER_CONSTANT, borderValue=(248, 248, 248))
         flag = 1
+        ret, rotated_img = cv.threshold(rotated_img, 128, 255, cv.THRESH_BINARY)
 
         return rotated_img, flag
 
@@ -112,24 +113,6 @@ def adjustBrightness(img):
 
     else:
         return img
-
-
-def vertical_median_filter(img):
-    # Create a copy of the image to store the filtered result
-    filtered_image = np.zeros_like(img)
-
-    # Loop through each column
-    for col in range(img.shape[1]):
-        # Get the column values
-        column_values = img[:, col]
-
-        # Calculate the median for this column
-        median_value = np.median(column_values)
-
-        # Replace the entire column with the median value
-        filtered_image[:, col] = median_value
-
-    return filtered_image
 
 
 def sharpen_if_needed(img):
@@ -241,7 +224,7 @@ def contrastDetection(img):
     # Calculate the standard deviation of pixel intensities
     std_dev = np.std(img)
 
-    if std_dev > 50:
+    if std_dev > 30:
         return img, 0
     else:
         min_val = np.min(img)
@@ -251,8 +234,6 @@ def contrastDetection(img):
 
 
 def decode_barcode(cropped_image):
-    import numpy as np
-
     # 0 means narrow, 1 means wide
     NARROW = "0"
     WIDE = "1"
@@ -323,3 +304,35 @@ def decode_barcode(cropped_image):
 
     print(f"Final decoded digits: {''.join(digits)}")
     return ''.join(digits)
+
+
+def decompress(img):
+    ranges = [(50, 100), (100, 150), (150, 200), (200, 250)]
+    # After examining histograms --> compressed images have a lot of values in the middle of histogram
+    threshold = 300000
+    frequencies = []  # To store the maximum frequency in each range
+
+    for lower_bound, upper_bound in ranges:
+        # Create a mask for the current range
+        mask = (img >= lower_bound) & (img < upper_bound)
+
+        # Count the number of pixels in this range
+        frequency = np.sum(mask)  # Sum of True values in the mask gives the count
+
+        # Store the frequency in the list
+        frequencies.append(frequency)
+
+    if any(value > threshold for value in frequencies):
+        print(f"decompression needed")
+        factor = 1.5
+        img = img.astype(np.float32)  # Convert to float for calculation
+        img = img * factor  # Multiply pixel values by the factor
+        img = np.clip(img, 0, 255)  # Ensure the pixel values stay within [0, 255]
+        img = img.astype(np.uint8)  # Convert back to uint8
+        kernel_size = 3
+        filtered_img = cv.medianBlur(img, kernel_size)
+        _, binary_img = cv.threshold(img, 220, 255, cv.THRESH_BINARY)
+        return binary_img
+
+    else:
+        return img

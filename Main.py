@@ -1,9 +1,11 @@
 from functions import *
 
-img = cv.imread("04 - fen el nadara.jpg", 0)
+img = cv.imread("09 - e3del el soora ya3ammm.jpg", 0)
 
 img = adjustBrightness(img)
+
 img, flag_2 = contrastDetection(img)
+
 if flag_2 == 2:
     blurredImg = blur(img)
     cropped_barcode = detectingBarCode(blurredImg, flag_2)
@@ -13,11 +15,11 @@ if flag_2 == 2:
 
 img = noiseDetection(img)
 img, flag = rotationDetection(img, 0)
+img = decompress(img)
 img = sharpen_if_needed(img)
 img, flag = objectDetection(img, flag)
 
 if flag == 1:
-    ret, img = cv.threshold(img, 128, 255, cv.THRESH_BINARY)
     cropped_barcode = detectingBarCode(img, 0)
     img = barcodeErosion(cropped_barcode)
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (1, 200))  # Adjust (width, height)
@@ -34,8 +36,12 @@ if flag == 1:
 elif flag == 0:
     print(flag)
     cropped_barcode = detectingBarCode(img, 0)
+    ret, img = cv.threshold(cropped_barcode, 110, 255, cv.THRESH_BINARY)
+    img = img[0:195]
 
+    plt.imshow(img, "gray")
+    plt.show()
 
     # Decode the barcode
-    decoded_value = decode_barcode(cropped_barcode)
+    decoded_value = decode_barcode(img)
     print(f"Decoded Barcode: {decoded_value}")
