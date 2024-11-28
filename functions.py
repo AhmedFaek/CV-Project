@@ -114,6 +114,24 @@ def adjustBrightness(img):
         return img
 
 
+def vertical_median_filter(img):
+    # Create a copy of the image to store the filtered result
+    filtered_image = np.zeros_like(img)
+
+    # Loop through each column
+    for col in range(img.shape[1]):
+        # Get the column values
+        column_values = img[:, col]
+
+        # Calculate the median for this column
+        median_value = np.median(column_values)
+
+        # Replace the entire column with the median value
+        filtered_image[:, col] = median_value
+
+    return filtered_image
+
+
 def sharpen_if_needed(img):
     # Compute the Laplacian
     laplacian = cv.Laplacian(img, cv.CV_64F)
@@ -166,9 +184,9 @@ def detectingBarCode(img, flag2):
     # Get the bounding box for the largest contour
     x, y, w, h = cv.boundingRect(barcode_contour)
 
-    padding = 10
+    padding = 0
     x = max(0, x - padding)
-    y = max(0, y - padding - 5)
+    y = max(0, y - padding)
     w = min(img.shape[1] - x, w + 2 * padding)
     h = min(img.shape[0] - y, h + 2 * padding)
 
@@ -180,7 +198,6 @@ def detectingBarCode(img, flag2):
     cv.drawContours(output, [barcode_contour], -1, (0, 255, 0), 2)
 
     if flag2 == 2:
-        _, cropped_barcode = cv.threshold(cropped_barcode, 80, 255, cv.THRESH_BINARY)
         cropped_barcode = barcodeErosion(cropped_barcode)
 
     # Display the results
@@ -210,6 +227,7 @@ def objectDetection(img, flag):
 
     if 2000000 <= total_sum <= 3000000:
         flag = 1
+        ret, img = cv.threshold(img, 50, 255, cv.THRESH_BINARY)
 
     return img, flag
 
@@ -223,7 +241,6 @@ def contrastDetection(img):
     # Calculate the standard deviation of pixel intensities
     std_dev = np.std(img)
 
-
     if std_dev > 50:
         return img, 0
     else:
@@ -231,3 +248,78 @@ def contrastDetection(img):
         max_val = np.max(img)
         stretched_image = ((img - min_val) / (max_val - min_val) * 255).astype(np.uint8)
         return stretched_image, 2
+
+
+def decode_barcode(cropped_image):
+    import numpy as np
+
+    # 0 means narrow, 1 means wide
+    NARROW = "0"
+    WIDE = "1"
+
+    # Map for Code 11 widths
+    code11_widths = {
+        "00110": "Stop/Start",
+        "10001": "1",
+        "01001": "2",
+        "11000": "3",
+        "00101": "4",
+        "10100": "5",
+        "01100": "6",
+        "00011": "7",
+        "10010": "8",
+        "10000": "9",
+        "00001": "0",
+        "00100": "-",
+    }
+
+    print("Step 1: Convert the image to binary")
+    # Convert the image to binary
+    mean = cropped_image.mean(axis=0)  # Average intensity across columns
+    print(f"Column-wise mean intensities: {mean}")
+
+    mean[mean <= 127] = 1  # Black bar
+    mean[mean > 128] = 0  # White bar
+    print(f"Binary conversion: {mean}")
+
+    # Convert to a string of pixels
+    pixels = ''.join(mean.astype(np.uint8).astype(str))
+    print(f"Binary pixel string: {pixels}")
+
+    # Detect bar sizes
+    narrow_bar_size = len(next(iter(pixels.split("0")), ""))
+    wide_bar_size = narrow_bar_size * 2
+    print(f"Detected narrow bar size: {narrow_bar_size}, wide bar size: {wide_bar_size}")
+
+    digits = []
+    pixel_index = 0
+    current_digit_widths = ""
+    skip_next = False
+
+    print("Step 2: Start decoding")
+    while pixel_index < len(pixels):
+        if skip_next:
+            print(f"Skipping separator bar at index {pixel_index}")
+            pixel_index += narrow_bar_size
+            skip_next = False
+            continue
+
+        count = 1
+        while (pixel_index + count < len(pixels)) and (pixels[pixel_index] == pixels[pixel_index + count]):
+            count += 1
+
+        print(f"Bar detected: {'Black' if pixels[pixel_index] == '1' else 'White'}, width: {count}")
+        current_digit_widths += NARROW if count == narrow_bar_size else WIDE
+        print(f"Current digit widths: {current_digit_widths}")
+
+        pixel_index += count
+
+        if current_digit_widths in code11_widths:
+            digit = code11_widths[current_digit_widths]
+            digits.append(digit)
+            print(f"Decoded digit: {digit}")
+            current_digit_widths = ""
+            skip_next = True  # Skip the separator bar
+
+    print(f"Final decoded digits: {''.join(digits)}")
+    return ''.join(digits)
